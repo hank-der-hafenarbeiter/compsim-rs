@@ -1,15 +1,15 @@
 
-enum Instruction {
+pub enum Instruction {
     //ARITHMETICAL OPERATION
                                 
     Add(Reg, Reg),          //Operation     Reg1 Reg2
                             //0001          xxxx xxxx 000...
-    Mul(Reg, Reg)           //Operation     Reg1
+    Mul(Reg, Reg),          //Operation     Reg1
                             //0010          xxxx xxxx 000...
     //LOADING AND SAVING
-    Ld(Reg, MemAddr::Addr), //Operation     Reg       Addr
+    Ld(Reg, MemAddr), //Operation     Reg       Addr
                             //0011          xxxx 0000 xxx...(52bit)
-    Sav(MemAddr::Addr, Reg),//Operation     Reg       Addr
+    Sav(MemAddr, Reg),//Operation     Reg       Addr
                             //0100          xxxx 0000 xxx...(52bit) 
     //STACK
     Push(Reg),              //Operation     Reg
@@ -17,11 +17,11 @@ enum Instruction {
     Pop(Reg),               //Operation     Reg
                             //0110          xxxx 000...
     //JUMPS
-    Jz(MemAddr::Addr),      //Operation               Addr
+    Jz(MemAddr),      //Operation               Addr
                             //0111 0001     0000 0000 xxx...(52bit)           
-    Jgz(MemAddr::Addr),     //Operation               Addr
+    Jgz(MemAddr),     //Operation               Addr
                             //0111 0010     0000 0000 xxx...(52bit) 
-    Jlz(MemAddr::Addr),     //Operation               Addr
+    Jlz(MemAddr),     //Operation               Addr
                             //0111 0011     0000 0000 xxx...(52bit) 
 
     Nop,                    //Operation
@@ -46,12 +46,14 @@ pub fn op_to_instr(op_code:i64) -> Instruction {
         }, 
              _ => panic!("Unrecognized instruction: {}", opcode),
     }
-enum MemAddr {
+}
+
+pub enum MemAddr {
     Addr(i64),
     Nullptr,
 }
 
-enum Reg {
+pub enum Reg {
     EAX,    //0x0001
     EBX,    //0x0010
     ECX,    //0x0011
@@ -61,7 +63,7 @@ enum Reg {
     ISP,    //0x0111
 }
 
-enum CPUBusOP {
+pub enum CPUBusOP {
     RequestBlock(MemAddr, usize),
     GiveBlock(Vector<MemAddr, usize>),
     Error(String),
@@ -82,7 +84,7 @@ fn get_reg1(num:u64) -> Reg { //reg1 is always coded into bits [4..7]
         0x0101 => Reg::ESP,
         0x0110 => Reg::EBP,
         0x0111 => Reg::ISP,
-             _ => panic!("Unknown register code: {}", num);
+             _ => panic!("Unknown register code: {}", num),
     }
 }
 
@@ -95,11 +97,23 @@ fn get_reg2(num:u64) -> Reg { //reg2 is always coded into bits [8..11]
         0x0101 => Reg::ESP,
         0x0110 => Reg::EBP,
         0x0111 => Reg::ISP,
-             _ => panic!("Unknown register code: {}", num);
+             _ => panic!("Unknown register code: {}", num),
     }
 }
 
-fn get_addr(num:u64) -> MemAddr::Addr {
+fn get_addr(num:u64) -> MemAddr {
     MemAddr::Addr(num && 0x00_0f_ff_ff_ff_ff_ff_ffu64)
 }
-        _ 
+
+
+
+
+
+
+
+
+
+
+
+
+
