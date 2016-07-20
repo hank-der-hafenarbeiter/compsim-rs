@@ -3,54 +3,15 @@ use std::sync::mpsc::{Sender, Receiver};
 //static CACHE_SIZE:usize = 0;
 static CORE_NUM:usize = 1;  //number of cores per cpu
 static PIPE_SIZE:usize = 8; //size of instruction pipeline
-
-enum Op {
-    //ARITHMETICAL OPERATION
-    Add(Reg, Reg),
-    Mul(Reg, Reg),
-    //LOADING AND SAVING
-    LDI(Reg, MemAddr),
-    SAV(MemAddr, Reg),
-    //STACK
-    Push(Reg),
-    Pop(Reg),
-    //JUMPS
-    Jz(MemAddr),
-    Jgz(MemAddr),
-    Jlz(MemAddr),
-    Nop(MemAddr),
-}
-
-enum MemAddr {
-    Addr(i64),
-    Nullptr,
-}
-
-enum Reg {
-    EAX,
-    EBX,
-    ECX,
-    EDX,
-    ESP,
-    EBP,
-    ISP,
-}
-
-enum CPUBusOP {
-    RequestBlock(MemAddr, usize),
-    GiveBlock(Vector<MemAddr, usize>),
-    Error(String),
-}
-
 struct Pipeline {
-    pipe:[(MemAddr, Op), PIPE_SIZE]; 
+    pipe:[(MemAddr, Instruction), PIPE_SIZE]; 
     start_addr:MemAddr,
     end_addr:MemAddr,
 }
 
 struct Core {
     //OPERATION PIPELINE
-    pipe:[(MemAddr, Op), PIPE_SIZE]
+    pipe:[(MemAddr, Instruction), PIPE_SIZE]
 
     //REGISTERS
     EAX:i64,
@@ -73,7 +34,7 @@ struct Core {
 
 impl Core {
     pub fn new() -> Core {
-        Core{   pipe:[(MemAddr::Nullptr,Op::Nop), PIPE_SIZE],
+        Core{   pipe:[(MemAddr::Nullptr,Instruction::Nop), PIPE_SIZE],
                 EAX:0,
                 EBX:0,
                 ECX:0,
@@ -89,7 +50,7 @@ impl Core {
         }
     }
     
-    fn decode_op(inst_code:i64) -> Op {
+    fn decode_op(inst_code:i64) -> Instruction {
         unimplemented!();
     }
 
@@ -97,7 +58,7 @@ impl Core {
         let cur_instr = load_instr_at(MemAddr(self.ISP)); 
     }
 
-    fn load_instr_at(&mut self, addr:MemAddr) -> Op {
+    fn load_instr_at(&mut self, addr:MemAddr) -> Instruction {
         if let Result(op) = self.pipe.get(addr) {
             op
         }
@@ -134,3 +95,5 @@ impl CPU {
             for (id,core) in cores.iter().enumerate() {
             
 }
+
+
