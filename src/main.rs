@@ -3,8 +3,12 @@ use std::sync::mpsc::{Sender, Receiver};
 mod CPU;
 mod utils;
 
+struct RAM {
+    placeholder:i64
+}
+
 struct Computer {
-    processor:CPU,
+    processor:CPU::CPU,
     memory:RAM,
 
 }

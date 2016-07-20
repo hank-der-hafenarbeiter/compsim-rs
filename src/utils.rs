@@ -1,3 +1,4 @@
+use std::ops::Sub;
 
 pub enum Instruction {
     //ARITHMETICAL OPERATION
@@ -28,7 +29,7 @@ pub enum Instruction {
                             //000...(64bit)
 }
 
-pub fn op_to_instr(op_code:i64) -> Instruction {
+pub fn op_to_instr(opcode:i64) -> Instruction {
     match get_nth_byte(opcode, 0) {
         0x0000 => Instruction::Nop, //Nop
         0x0001 => Instruction::Add(get_reg1(opcode),get_reg2(opcode)), //Add
@@ -48,10 +49,28 @@ pub fn op_to_instr(op_code:i64) -> Instruction {
     }
 }
 
+#[derive(Copy,Clone, PartialOrd, PartialEq)]
 pub enum MemAddr {
     Addr(i64),
     Nullptr,
 }
+
+impl Sub for MemAddr {
+    type Output = MemAddr;
+
+    fn sub(self, _rhs: MemAddr) -> MemAddr {
+        if let MemAddr::Addr(lhs) = self {
+            if let MemAddr::Addr(rhs) = _rhs {
+                return MemAddr::Addr(lhs-rhs)
+            }
+        }
+        return MemAddr::Nullptr;
+
+    }
+}
+
+
+    
 
 pub enum Reg {
     EAX,    //0x0001
@@ -63,10 +82,15 @@ pub enum Reg {
     ISP,    //0x0111
 }
 
-pub enum CPUBusOP {
+pub enum CPUBusOp {
     RequestBlock(MemAddr, usize),
-    GiveBlock(Vector<MemAddr, usize>),
+    GiveBlock(Vec<(MemAddr, usize)>),
     Error(String),
+}
+
+pub enum MemBusOp {
+    RequestBlock(MemAddr, usize, usize),
+    Error(String)
 }
 
 fn get_nth_byte(num:u64, nth:usize) -> u8 {
