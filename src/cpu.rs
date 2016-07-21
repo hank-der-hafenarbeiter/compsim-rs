@@ -1,17 +1,16 @@
-use std::sync::mpsc::{Sender, Receiver};
+use snowflake::ProcessUniqueId;
+use std::sync::mpsc::{Sender, Receiver, channel};
+use utils::*;
 
-//static CACHE_SIZE:usize = 0;
-static CORE_NUM:usize = 1;  //number of cores per cpu
-static PIPE_SIZE:usize = 8; //size of instruction pipeline
-struct Pipeline {
-    pipe:[(MemAddr, Instruction), PIPE_SIZE]; 
-    start_addr:MemAddr,
-    end_addr:MemAddr,
-}
+//const CACHE_SIZE:usize = 0;
+const CORE_NUM:usize = 1;  //number of cores per cpu
+const PIPE_SIZE:usize = 8; //size of instruction pipeline
+
 
 struct Core {
+    ID:ProcessUniqueId,
     //OPERATION PIPELINE
-    pipe:[(MemAddr, Instruction), PIPE_SIZE]
+    pipe:[(MemAddr, i64); PIPE_SIZE], 
 
     //REGISTERS
     EAX:i64,
@@ -28,13 +27,14 @@ struct Core {
     CARRY:bool,
 
     //CPU BUS
-    tx:Option<Sender>,
-    rx:Option<Receiver>,
+    tx:Sender<CPUBusOp>,
+    rx:Receiver<CPUBusOp>,
 }
 
 impl Core {
-    pub fn new() -> Core {
-        Core{   pipe:[(MemAddr::Nullptr,Instruction::Nop), PIPE_SIZE],
+    pub fn new(_tx:Sender<CPUBusOp>, _rx:Receiver<CPUBusOp>) -> Core {
+        Core{   ID:ProcessUniqueId::new(), 
+                pipe:[(MemAddr::Nullptr, 0); PIPE_SIZE],
                 EAX:0,
                 EBX:0,
                 ECX:0,
@@ -42,58 +42,85 @@ impl Core {
                 ESP:0,
                 EBP:0,
                 ISP:0,
-                OVERFLOW:0,
-                ZERO:0,
-                CARRY:0,
-                tx:None,
-                rx:None,
+                OVERFLOW:false,
+                ZERO:false,
+                CARRY:false,
+                tx:_tx,
+                rx:_rx,
         }
     }
-    
-    fn decode_op(inst_code:i64) -> Instruction {
-        unimplemented!();
+
+    fn load_from_pipe(&self, addr:MemAddr) -> Result<i64, ()> {
+        if let MemAddr::Addr(_) = addr {
+            if let MemAddr::Addr(offset) = self.pipe[PIPE_SIZE-1].0 - addr {
+                if 0 <= offset && offset < PIPE_SIZE as i64 {
+                    return Ok(self.pipe[offset as usize].1)
+                } else {
+                    return Err(())
+                }
+            }
+        }
+        Err(())
     }
 
     pub fn exec_instr(&mut self) {
-        let cur_instr = load_instr_at(MemAddr(self.ISP)); 
+        let cur_addr = self.ISP;
+        let cur_instr = self.load_instr_at(MemAddr::Addr(cur_addr)); 
     }
 
     fn load_instr_at(&mut self, addr:MemAddr) -> Instruction {
-        if let Result(op) = self.pipe.get(addr) {
-            op
+        if let Ok(inst) = self.load_from_pipe(addr) {
+            op_to_instr(inst)
         }
         else {
-            0
+            let mut mem_block = self.load_from_memory(addr, PIPE_SIZE);
+            let mut i:usize = 0;
+            while let Some(item) = mem_block.pop(){
+                self.pipe[i] = item;
+                i += 1;
+            }
+            op_to_instr(self.pipe[0].1)
+        }
     }
 
-    fn load_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec(MemAddr, i64) {
-        tx.send(CPUBusOP::RequestBlock(start_addr,num));
-        match ans = rx.recv().expect("CPUBus has disconnected unexpectedly") {
-            CPUBusOP::GiveBlock(res_vec) => res_vec,
-            CPUBusOP::Error(err) => panic!("CPUBus returned error in load_from_memory(): {}", err),
+    fn load_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec<(MemAddr, i64)> {
+        self.tx. send(CPUBusOp::RequestBlock(start_addr,num));
+        match self.rx.recv().expect("CPUBus has disconnected unexpectedly") {
+            CPUBusOp::GiveBlock(res_vec) => res_vec,
+            CPUBusOp::RequestBlock(_,_) => panic!("Unexpectedly received RequestBlock in load_from_memory()"),
+            CPUBusOp::Error(err) => panic!("CPUBus returned error in load_from_memory(): {}", err),
         }
     }
 }
 
-struct CPU {
+pub struct CPU {
     //cache:[i64, CACHE_SIZE],
-    cores:Vec<CPU>,
+    cores:Vec<(Core, Sender<CPUBusOp>, Receiver<CPUBusOp>)>,
     //BUS
-    tx:Option<Sender>,
-    rx:Option<Receiver>,
+    tx:Sender<MemBusOp>,
+    rx:Receiver<MemBusOp>,
 }  
 
 impl CPU {
-    pub fn new() -> CPU {
-        CPU{cores:Vector::new<Core>()
-            tx:None,
-            rx:None,}
+    pub fn new(_tx:Sender<MemBusOp>, _rx:Receiver<MemBusOp>) -> CPU {
+        let mut _cores:Vec<(Core, Sender<CPUBusOp>, Receiver<CPUBusOp>)> = Vec::new();
+        for i in 0..CORE_NUM {
+            let (tx_cpu, rx_core) = channel();
+            let (tx_core, rx_cpu) = channel();
+            _cores.push((Core::new(tx_core, rx_core), tx_cpu, rx_cpu));
+        }
+        CPU{cores:_cores,
+            tx:_tx,
+            rx:_rx,}
     }
 
-    pub fn exec() {
+    pub fn exec(&mut self) {
         loop {
-            for (id,core) in cores.iter().enumerate() {
+            for (id,core) in self.cores.iter().enumerate() {
             
+            }
+        }
+    }
 }
 
 

@@ -89,7 +89,8 @@ pub enum CPUBusOp {
 }
 
 pub enum MemBusOp {
-    RequestBlock(MemAddr, usize, usize),
+    RequestBlock(MemAddr, usize),
+    GiveBlock(Vec<(MemAddr, i64)>),
     Error(String)
 }
 
