@@ -5,32 +5,10 @@ use utils::*;
 const CORE_NUM:usize = 1;  //number of cores per cpu
 const PIPE_SIZE:usize = 8; //size of instruction pipeline
 
-struct Pipeline {
-    pipe:[(MemAddr, i64); PIPE_SIZE], 
-}
-
-impl Pipeline {
-
-    pub fn new () -> Pipeline {
-        Pipeline { pipe:[(MemAddr::Nullptr, 0); PIPE_SIZE]}
-    }
-
-    fn get(&self, addr:MemAddr) -> Result<i64, ()> {
-        if let MemAddr::Addr(_) = addr {
-            let MemAddr::Addr(offset) = self.pipe[PIPE_SIZE-1].0 - addr;       
-            if 0 <= offset && offset < PIPE_SIZE as i64 {
-                return Ok(self.pipe[offset as usize].1)
-            } else {
-                return Err(())
-            }
-        }
-        Err(())
-    }
-}
 
 struct Core {
     //OPERATION PIPELINE
-    pipe:Pipeline,
+    pipe:[(MemAddr, i64); PIPE_SIZE], 
 
     //REGISTERS
     EAX:i64,
@@ -47,13 +25,13 @@ struct Core {
     CARRY:bool,
 
     //CPU BUS
-    tx:Option<Sender<CPUBusOp>>,
-    rx:Option<Receiver<CPUBusOp>>,
+    tx:Sender<CPUBusOp>,
+    rx:Receiver<CPUBusOp>,
 }
 
 impl Core {
-    pub fn new() -> Core {
-        Core{   pipe:Pipeline::new(),
+    pub fn new(_tx:Sender<CPUBusOp>, _rx:Receiver<CPUBusOp>) -> Core {
+        Core{   pipe:[(MemAddr::Nullptr, 0); PIPE_SIZE],
                 EAX:0,
                 EBX:0,
                 ECX:0,
@@ -64,33 +42,49 @@ impl Core {
                 OVERFLOW:false,
                 ZERO:false,
                 CARRY:false,
-                tx:None,
-                rx:None,
+                tx:_tx,
+                rx:_rx,
         }
     }
-    
+
+    fn load_from_pipe(&self, addr:MemAddr) -> Result<i64, ()> {
+        if let MemAddr::Addr(_) = addr {
+            if let MemAddr::Addr(offset) = self.pipe[PIPE_SIZE-1].0 - addr {
+                if 0 <= offset && offset < PIPE_SIZE as i64 {
+                    return Ok(self.pipe[offset as usize].1)
+                } else {
+                    return Err(())
+                }
+            }
+        }
+        Err(())
+    }
 
     pub fn exec_instr(&mut self) {
-        let cur_instr = self.load_instr_at(MemAddr::Addr(self.ISP)); 
+        let cur_addr = self.ISP;
+        let cur_instr = self.load_instr_at(MemAddr::Addr(cur_addr)); 
     }
 
     fn load_instr_at(&mut self, addr:MemAddr) -> Instruction {
-        if let Ok(inst) = self.pipe.get(addr) {
+        if let Ok(inst) = self.load_from_pipe(addr) {
             op_to_instr(inst)
         }
         else {
-            let mem_block = self.load_from_memory(addr, PIPE_SIZE);
-            for i in 0..7 {
-                self.pipe[i] = mem_block.pop();
+            let mut mem_block = self.load_from_memory(addr, PIPE_SIZE);
+            let mut i:usize = 0;
+            while let Some(item) = mem_block.pop(){
+                self.pipe[i] = item;
+                i += 1;
             }
-            op_to_instr(self.pipe[0].1);
+            op_to_instr(self.pipe[0].1)
         }
     }
 
     fn load_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec<(MemAddr, i64)> {
-        self.tx.send(CPUBusOp::RequestBlock(start_addr,num));
+        self.tx. send(CPUBusOp::RequestBlock(start_addr,num));
         match self.rx.recv().expect("CPUBus has disconnected unexpectedly") {
             CPUBusOp::GiveBlock(res_vec) => res_vec,
+            CPUBusOp::RequestBlock(_,_) => panic!("Unexpectedly received RequestBlock in load_from_memory()"),
             CPUBusOp::Error(err) => panic!("CPUBus returned error in load_from_memory(): {}", err),
         }
     }

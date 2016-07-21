@@ -30,18 +30,18 @@ pub enum Instruction {
 }
 
 pub fn op_to_instr(opcode:i64) -> Instruction {
-    match get_nth_byte(opcode, 0) {
-        0x0000 => Instruction::Nop, //Nop
-        0x0001 => Instruction::Add(get_reg1(opcode),get_reg2(opcode)), //Add
-        0x0010 => Instruction::Mul(get_reg1(opcode),get_reg2(opcode)), //Mul
-        0x0011 => Instruction::Ld(get_reg1(opcode), get_addr(opcode)), //Ld
-        0x0100 => Instruction::Sav(get_addr(opcode),get_reg1(opcode)), //Sav
-        0x0101 => Instruction::Push(get_reg1(opcode)), //Push
-        0x0110 => Instruction::Pop(get_reg1(opcode)), //Pop
-        0x0111 => { match get_nth_byte(opcode as u64, 1)  {
-                        0x0001 => Instruction::Jz(get_addr(opcode)),
-                        0x0010 => Instruction::Jgz(get_addr(opcode)),
-                        0x0011 => Instruction::Jlz(get_addr(opcode)),
+    match get_get_opcode(opcode as u64) {
+        0b0000_0000 => Instruction::Nop, //Nop
+        0b0000_0001 => Instruction::Add(get_reg1(opcode as u64),get_reg2(opcode as u64)), //Add
+        0b0000_0010 => Instruction::Mul(get_reg1(opcode as u64),get_reg2(opcode as u64)), //Mul
+        0b0000_0011 => Instruction::Ld(get_reg1(opcode as u64), get_addr(opcode as u64)), //Ld
+        0b0000_0100 => Instruction::Sav(get_addr(opcode as u64),get_reg1(opcode as u64)), //Sav
+        0b0000_0101 => Instruction::Push(get_reg1(opcode as u64)), //Push
+        0b0000_0110 => Instruction::Pop(get_reg1(opcode as u64)), //Pop
+        0b0000_0111 => { match get_nth_byte(opcode as u64 as u64, 1)  {
+                        0x0001 => Instruction::Jz(get_addr(opcode as u64)),
+                        0x0010 => Instruction::Jgz(get_addr(opcode as u64)),
+                        0x0011 => Instruction::Jlz(get_addr(opcode as u64)),
                              _ => panic!("Unrecognized jump: {}", opcode),
                     }
         }, 
@@ -84,7 +84,7 @@ pub enum Reg {
 
 pub enum CPUBusOp {
     RequestBlock(MemAddr, usize),
-    GiveBlock(Vec<(MemAddr, usize)>),
+    GiveBlock(Vec<(MemAddr, i64)>),
     Error(String),
 }
 
@@ -94,50 +94,43 @@ pub enum MemBusOp {
 }
 
 fn get_nth_byte(num:u64, nth:usize) -> u8 {
-    let mask =  0x00_00_00_00_00_00_00_ffi64;
+    let mask =  0x00_00_00_00_00_00_00_ffu64;
     num >> (7-num)*8;
-    (mask && num) as u8
+    (mask & num) as u8
 }
 
 fn get_reg1(num:u64) -> Reg { //reg1 is always coded into bits [4..7]
-    match get_nth_byte(num, 2) {
-        0x0001 => Reg::EAX,
-        0x0010 => Reg::EBX,
-        0x0011 => Reg::ECX,
-        0x0100 => Reg::EDX,
-        0x0101 => Reg::ESP,
-        0x0110 => Reg::EBP,
-        0x0111 => Reg::ISP,
+    match get_nth_byte(num, 2) & 0xf0 { //reg in 4 most significant bits
+        0x10 => Reg::EAX,
+        0x20 => Reg::EBX,
+        0x30 => Reg::ECX,
+        0x40 => Reg::EDX,
+        0x50 => Reg::ESP,
+        0x60 => Reg::EBP,
+        0x70 => Reg::ISP,
              _ => panic!("Unknown register code: {}", num),
     }
 }
 
 fn get_reg2(num:u64) -> Reg { //reg2 is always coded into bits [8..11]
-    match get_nth_byte(num, 3) {
-        0x0001 => Reg::EAX,
-        0x0010 => Reg::EBX,
-        0x0011 => Reg::ECX,
-        0x0100 => Reg::EDX,
-        0x0101 => Reg::ESP,
-        0x0110 => Reg::EBP,
-        0x0111 => Reg::ISP,
+    match get_nth_byte(num, 2) & 0x0f {
+        0x01 => Reg::EAX,
+        0x02 => Reg::EBX,
+        0x03 => Reg::ECX,
+        0x04 => Reg::EDX,
+        0x05 => Reg::ESP,
+        0x06 => Reg::EBP,
+        0x07 => Reg::ISP,
              _ => panic!("Unknown register code: {}", num),
     }
 }
 
 fn get_addr(num:u64) -> MemAddr {
-    MemAddr::Addr(num && 0x00_0f_ff_ff_ff_ff_ff_ffu64)
+    MemAddr::Addr((num & 0x00_0f_ff_ff_ff_ff_ff_ffu64) as i64)
 }
 
 
-
-
-
-
-
-
-
-
-
-
+fn get_get_opcode(num:u64)->u8 { //return 0000_xxxx opcode
+    (num >> 56) as u8
+}
 
