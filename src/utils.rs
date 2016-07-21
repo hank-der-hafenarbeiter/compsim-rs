@@ -1,5 +1,7 @@
 use std::ops::Sub;
+use snowflake::ProcessUniqueId;
 
+#[derive(Debug)]
 pub enum Instruction {
     //ARITHMETICAL OPERATION
                                 
@@ -29,27 +31,27 @@ pub enum Instruction {
                             //000...(64bit)
 }
 
-pub fn op_to_instr(opcode:i64) -> Instruction {
+pub fn op_to_instr(opcode:i64) -> Result<Instruction, ()> {
     match get_get_opcode(opcode as u64) {
-        0b0000_0000 => Instruction::Nop, //Nop
-        0b0000_0001 => Instruction::Add(get_reg1(opcode as u64),get_reg2(opcode as u64)), //Add
-        0b0000_0010 => Instruction::Mul(get_reg1(opcode as u64),get_reg2(opcode as u64)), //Mul
-        0b0000_0011 => Instruction::Ld(get_reg1(opcode as u64), get_addr(opcode as u64)), //Ld
-        0b0000_0100 => Instruction::Sav(get_addr(opcode as u64),get_reg1(opcode as u64)), //Sav
-        0b0000_0101 => Instruction::Push(get_reg1(opcode as u64)), //Push
-        0b0000_0110 => Instruction::Pop(get_reg1(opcode as u64)), //Pop
+        0b0000_0000 => Ok(Instruction::Nop), //Nop
+        0b0000_0001 => Ok(Instruction::Add(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Add
+        0b0000_0010 => Ok(Instruction::Mul(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Mul
+        0b0000_0011 => Ok(Instruction::Ld(get_reg1(opcode as u64), get_addr(opcode as u64))), //Ld
+        0b0000_0100 => Ok(Instruction::Sav(get_addr(opcode as u64),get_reg1(opcode as u64))), //Sav
+        0b0000_0101 => Ok(Instruction::Push(get_reg1(opcode as u64))), //Push
+        0b0000_0110 => Ok(Instruction::Pop(get_reg1(opcode as u64))), //Pop
         0b0000_0111 => { match get_nth_byte(opcode as u64 as u64, 1)  {
-                        0x0001 => Instruction::Jz(get_addr(opcode as u64)),
-                        0x0010 => Instruction::Jgz(get_addr(opcode as u64)),
-                        0x0011 => Instruction::Jlz(get_addr(opcode as u64)),
-                             _ => panic!("Unrecognized jump: {}", opcode),
+                        0x0001 => Ok(Instruction::Jz(get_addr(opcode as u64))),
+                        0x0010 => Ok(Instruction::Jgz(get_addr(opcode as u64))),
+                        0x0011 => Ok(Instruction::Jlz(get_addr(opcode as u64))),
+                             _ => Err(()),
                     }
         }, 
-             _ => panic!("Unrecognized instruction: {}", opcode),
+             _ => Err(()),
     }
 }
 
-#[derive(Copy,Clone, PartialOrd, PartialEq)]
+#[derive(Copy,Clone, PartialOrd, PartialEq, Debug)]
 pub enum MemAddr {
     Addr(i64),
     Nullptr,
@@ -72,6 +74,7 @@ impl Sub for MemAddr {
 
     
 
+#[derive(Debug)]
 pub enum Reg {
     EAX,    //0x0001
     EBX,    //0x0010
@@ -82,15 +85,20 @@ pub enum Reg {
     ISP,    //0x0111
 }
 
+#[derive(Debug)]
 pub enum CPUBusOp {
     RequestBlock(MemAddr, usize),
     GiveBlock(Vec<(MemAddr, i64)>),
+    Sleep,
+    WakeUp,
+    ExecAt(MemAddr),
     Error(String),
 }
 
+#[derive(Debug)]
 pub enum MemBusOp {
-    RequestBlock(MemAddr, usize),
-    GiveBlock(Vec<(MemAddr, i64)>),
+    RequestBlock(ProcessUniqueId, MemAddr, usize),
+    GiveBlock(ProcessUniqueId, Vec<(MemAddr, i64)>),
     Error(String)
 }
 

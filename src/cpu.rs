@@ -69,8 +69,8 @@ impl Core {
     }
 
     fn load_instr_at(&mut self, addr:MemAddr) -> Instruction {
-        if let Ok(inst) = self.load_from_pipe(addr) {
-            op_to_instr(inst)
+        if let Ok(opcode) = self.load_from_pipe(addr) {
+            op_to_instr(opcode).expect("Unrecogniced Instruction!")
         }
         else {
             let mut mem_block = self.load_from_memory(addr, PIPE_SIZE);
@@ -79,7 +79,7 @@ impl Core {
                 self.pipe[i] = item;
                 i += 1;
             }
-            op_to_instr(self.pipe[0].1)
+            op_to_instr(self.pipe[0].1).expect("Unrecogniced instruction")
         }
     }
 
@@ -89,6 +89,7 @@ impl Core {
             CPUBusOp::GiveBlock(res_vec) => res_vec,
             CPUBusOp::RequestBlock(_,_) => panic!("Unexpectedly received RequestBlock in load_from_memory()"),
             CPUBusOp::Error(err) => panic!("CPUBus returned error in load_from_memory(): {}", err),
+            op => panic!("Unimplemented CPUBusOp:{:?}", op),
         }
     }
 }
@@ -115,9 +116,27 @@ impl CPU {
     }
 
     pub fn exec(&mut self) {
+        
         loop {
-            for (id,core) in self.cores.iter().enumerate() {
-            
+            while let Ok(op) = self.rx.try_recv() {
+                if let MemBusOp::GiveBlock(id, block) = op {
+                    if let Err(_) = self.cores.iter().find(|&&(ref c, _, _)| id == c.ID).expect("Unexpected ProcessorID in cpu::exec()!").1.send(CPUBusOp::GiveBlock(block)) {
+                        panic!("Channel from CPU to Core has closed unexpectedly in CPU::exec()");
+                    }
+                } else {
+                    panic!("Unexpected MemBusOp in cpu::exec()");
+                }
+            }
+            for &(ref core, ref tx, ref rx) in self.cores.iter() {
+                while let Ok(op) = rx.try_recv() {
+                    if let CPUBusOp::RequestBlock(addr, size) = op {
+                        if let Err(_) = self.tx.send(MemBusOp::RequestBlock(core.ID, addr, size)) {
+                            panic!("Channel from CPU to Motherboard has closed unexpectedly in CPU::exec()");
+                        }
+                    } else {
+                        panic!("Unexpected MemBusOp while processing memory requests of cores in cpu::exec()");
+                    }
+                }
             }
         }
     }
