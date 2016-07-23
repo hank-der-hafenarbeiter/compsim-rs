@@ -1,7 +1,7 @@
 use std::ops::Sub;
 use snowflake::ProcessUniqueId;
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     //ARITHMETICAL OPERATION
                                 
@@ -74,7 +74,7 @@ impl Sub for MemAddr {
 
     
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Reg {
     EAX,    //0x0001
     EBX,    //0x0010

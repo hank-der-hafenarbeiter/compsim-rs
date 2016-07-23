@@ -88,22 +88,77 @@ impl Core {
         Err(())
     }
 
+    fn set_flags(&mut self, res:i64, _of:bool) {
+
+        if _of {
+            self.OVERFLOW = true;
+            self.CARRY = true;
+        } else {
+            self.OVERFLOW = false;
+            self.CARRY = false;
+        }
+
+        if res < 0 {
+            self.SIGN = true;
+            self.ZERO = false;
+        } else if res == 0 {
+            self.ZERO = true;
+            self.SIGN = false;
+        }
+    }
+
+    fn reset_flags(&mut self) {
+        self.CARRY = false;
+        self.OVERFLOW = false;
+        self.ZERO = false;
+        self.SIGN = false;
+    }
+
     pub fn exec_instr(&mut self) {
+
         let cur_addr = self.ISP;
         let cur_instr = self.read_instr_at(MemAddr::Addr(cur_addr)); 
         match cur_instr {
-            Instruction::Add(reg1, reg2) => self.write_reg(reg1, self.read_reg(reg1)+self.read_reg(reg2)), 
-            Instruction::Mul(reg1, reg2) => self.write_reg(reg1, self.read_reg(reg1)*self.read_reg(reg2)), 
-            Instruction::Ld(reg1, addr)  => self.write_reg(reg1, self.read_from_memory(addr, 1).pop().expect("Received empty block from read_from_memory()").1), 
-            Instruction::Sav(addr, reg)  => self.write_to_memory(vec![(addr, self.read_reg(reg))]),
+            Instruction::Add(reg1, reg2) => {
+                let (mut n,of) = self.read_reg(reg1).overflowing_add(self.read_reg(reg2));
+                if of {
+                    n = n.wrapping_add(self.read_reg(reg1));
+                }
+                self.write_reg(reg1, n);
+                self.set_flags(n,of);
+            }, 
+
+            Instruction::Mul(reg1, reg2) => {
+                let (mut n,of) = self.read_reg(reg1).overflowing_mul(self.read_reg(reg2));
+                if of {
+                    n = n.wrapping_mul(self.read_reg(reg1));
+                }
+                self.write_reg(reg1, n);
+                self.set_flags(n,of);
+            }, 
+
+            Instruction::Ld(reg1, addr)  => {
+                let n = self.read_from_memory(addr, 1).pop().expect("Received empty block from read_from_memory()").1;
+                self.write_reg(reg1, n);
+                self.set_flags(n,false);
+            }, 
+
+            Instruction::Sav(addr, reg)  => {
+                let n = self.read_reg(reg);
+                self.write_to_memory(vec![(addr, n)]);
+            },
+
             Instruction::Push(reg)       => {
                 self.ESP -= 1; 
-                self.write_to_memory(vec![(MemAddr::Addr(self.ESP), self.read_reg(reg))]);
+                let n = self.read_reg(reg);
+                self.write_to_memory(vec![(MemAddr::Addr(self.ESP), n)]);
             },
+
             Instruction::Pop(reg)        => {
                 self.ESP += 1;
                 assert!(self.ESP >= 0);
-                self.write_reg(reg, self.read_from_memory(MemAddr::Addr(self.ESP), 1).pop().expect("Received empty block from read_from_memory()").1);
+                let n = self.read_from_memory(MemAddr::Addr(self.ESP), 1).pop().expect("Received empty block from read_from_memory()").1;
+                self.write_reg(reg, n);
             },
             Instruction::Jz(addr)        => if self.ZERO {
                 if let Ok(content) = self.read_from_pipe(addr) {
@@ -136,10 +191,10 @@ impl Core {
         }
         else {
             let mut mem_block = self.read_from_memory(addr, PIPE_SIZE);
-            let mut i:usize = 0;
+            let mut i:usize = PIPE_SIZE-1;
             while let Some(item) = mem_block.pop(){
                 self.pipe[i] = item;
-                i += 1;
+                i -= 1;
             }
             op_to_instr(self.pipe[0].1).expect("Unrecogniced instruction")
         }
