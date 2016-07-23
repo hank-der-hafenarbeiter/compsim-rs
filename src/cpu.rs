@@ -24,6 +24,7 @@ struct Core {
     //FLAGS
     OVERFLOW:bool,
     ZERO:bool,
+    SIGN:bool,
     CARRY:bool,
 
     //CPU BUS
@@ -44,13 +45,37 @@ impl Core {
                 ISP:0,
                 OVERFLOW:false,
                 ZERO:false,
+                SIGN:false,
                 CARRY:false,
                 tx:_tx,
                 rx:_rx,
         }
     }
+    fn read_reg(&self, reg:Reg) -> i64 { 
+        match reg {
+            Reg::EAX => self.EAX,
+            Reg::EBX => self.EBX,
+            Reg::ECX => self.ECX,
+            Reg::EDX => self.EDX,
+            Reg::ESP => self.ESP,
+            Reg::EBP => self.EBP,
+            Reg::ISP => self.ISP,
+        }
+    }
 
-    fn load_from_pipe(&self, addr:MemAddr) -> Result<i64, ()> {
+    fn write_reg(&mut self, reg:Reg, value:i64) {
+        match reg {
+            Reg::EAX => self.EAX = value,
+            Reg::EBX => self.EBX = value,
+            Reg::ECX => self.ECX = value,
+            Reg::EDX => self.EDX = value,
+            Reg::ESP => self.ESP = value,
+            Reg::EBP => self.EBP = value,
+            Reg::ISP => self.ISP = value,
+        };
+    }
+
+    fn read_from_pipe(&self, addr:MemAddr) -> Result<i64, ()> {
         if let MemAddr::Addr(_) = addr {
             if let MemAddr::Addr(offset) = self.pipe[PIPE_SIZE-1].0 - addr {
                 if 0 <= offset && offset < PIPE_SIZE as i64 {
@@ -65,15 +90,52 @@ impl Core {
 
     pub fn exec_instr(&mut self) {
         let cur_addr = self.ISP;
-        let cur_instr = self.load_instr_at(MemAddr::Addr(cur_addr)); 
+        let cur_instr = self.read_instr_at(MemAddr::Addr(cur_addr)); 
+        match cur_instr {
+            Instruction::Add(reg1, reg2) => self.write_reg(reg1, self.read_reg(reg1)+self.read_reg(reg2)), 
+            Instruction::Mul(reg1, reg2) => self.write_reg(reg1, self.read_reg(reg1)*self.read_reg(reg2)), 
+            Instruction::Ld(reg1, addr)  => self.write_reg(reg1, self.read_from_memory(addr, 1).pop().expect("Received empty block from read_from_memory()").1), 
+            Instruction::Sav(addr, reg)  => self.write_to_memory(vec![(addr, self.read_reg(reg))]),
+            Instruction::Push(reg)       => {
+                self.ESP -= 1; 
+                self.write_to_memory(vec![(MemAddr::Addr(self.ESP), self.read_reg(reg))]);
+            },
+            Instruction::Pop(reg)        => {
+                self.ESP += 1;
+                assert!(self.ESP >= 0);
+                self.write_reg(reg, self.read_from_memory(MemAddr::Addr(self.ESP), 1).pop().expect("Received empty block from read_from_memory()").1);
+            },
+            Instruction::Jz(addr)        => if self.ZERO {
+                if let Ok(content) = self.read_from_pipe(addr) {
+                    self.ISP = content;
+                } else {
+                    panic!("Jump (Jz) to invalid address");
+                }
+            },
+            Instruction::Jgz(addr)       => if !self.SIGN {
+                if let Ok(content) = self.read_from_pipe(addr) {
+                    self.ISP = content;
+                } else {
+                    panic!("Jump (Jz) to invalid address");
+                }
+            },
+            Instruction::Jlz(addr)       => if self.SIGN {
+                if let Ok(content) = self.read_from_pipe(addr) {
+                    self.ISP = content;
+                } else {
+                    panic!("Jump (Jz) to invalid address");
+                }
+            }, 
+            Instruction::Nop             => (), 
+        }
     }
 
-    fn load_instr_at(&mut self, addr:MemAddr) -> Instruction {
-        if let Ok(opcode) = self.load_from_pipe(addr) {
+    fn read_instr_at(&mut self, addr:MemAddr) -> Instruction {
+        if let Ok(opcode) = self.read_from_pipe(addr) {
             op_to_instr(opcode).expect("Unrecogniced Instruction!")
         }
         else {
-            let mut mem_block = self.load_from_memory(addr, PIPE_SIZE);
+            let mut mem_block = self.read_from_memory(addr, PIPE_SIZE);
             let mut i:usize = 0;
             while let Some(item) = mem_block.pop(){
                 self.pipe[i] = item;
@@ -83,14 +145,18 @@ impl Core {
         }
     }
 
-    fn load_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec<(MemAddr, i64)> {
+    fn read_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec<(MemAddr, i64)> {
         self.tx. send(CPUBusOp::RequestBlock(start_addr,num));
         match self.rx.recv().expect("CPUBus has disconnected unexpectedly") {
             CPUBusOp::GiveBlock(res_vec) => res_vec,
-            CPUBusOp::RequestBlock(_,_) => panic!("Unexpectedly received RequestBlock in load_from_memory()"),
-            CPUBusOp::Error(err) => panic!("CPUBus returned error in load_from_memory(): {}", err),
+            CPUBusOp::RequestBlock(_,_) => panic!("Unexpectedly received RequestBlock in read_from_memory()"),
+            CPUBusOp::Error(err) => panic!("CPUBus returned error in read_from_memory(): {}", err),
             op => panic!("Unimplemented CPUBusOp:{:?}", op),
         }
+    }
+
+    fn write_to_memory(&self, values:Vec<(MemAddr, i64)>) {
+        self.tx.send(CPUBusOp::GiveBlock(values));
     }
 }
 
