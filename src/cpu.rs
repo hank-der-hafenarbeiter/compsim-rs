@@ -146,12 +146,14 @@ impl Core {
             Instruction::Sav(addr, reg)  => {
                 let n = self.read_reg(reg);
                 self.write_to_memory(vec![(addr, n)]);
+                self.set_flags(n,false);
             },
 
             Instruction::Push(reg)       => {
                 self.ESP -= 1; 
                 let n = self.read_reg(reg);
                 self.write_to_memory(vec![(MemAddr::Addr(self.ESP), n)]);
+                self.set_flags(n,false);
             },
 
             Instruction::Pop(reg)        => {
@@ -159,29 +161,33 @@ impl Core {
                 assert!(self.ESP >= 0);
                 let n = self.read_from_memory(MemAddr::Addr(self.ESP), 1).pop().expect("Received empty block from read_from_memory()").1;
                 self.write_reg(reg, n);
+                self.set_flags(n,false);
             },
             Instruction::Jz(addr)        => if self.ZERO {
-                if let Ok(content) = self.read_from_pipe(addr) {
-                    self.ISP = content;
+                if let MemAddr::Addr(addr_as_i64) = addr {
+                    self.ISP = addr_as_i64;
                 } else {
                     panic!("Jump (Jz) to invalid address");
                 }
+                self.set_flags(0,false);
             },
             Instruction::Jgz(addr)       => if !self.SIGN {
-                if let Ok(content) = self.read_from_pipe(addr) {
-                    self.ISP = content;
+                if let MemAddr::Addr(addr_as_i64) = addr {
+                    self.ISP = addr_as_i64;
                 } else {
                     panic!("Jump (Jz) to invalid address");
                 }
+                self.set_flags(0,false);
             },
             Instruction::Jlz(addr)       => if self.SIGN {
-                if let Ok(content) = self.read_from_pipe(addr) {
-                    self.ISP = content;
+                if let MemAddr::Addr(addr_as_i64) = addr {
+                    self.ISP = addr_as_i64;
                 } else {
                     panic!("Jump (Jz) to invalid address");
                 }
+                self.set_flags(0,false);
             }, 
-            Instruction::Nop             => (), 
+            Instruction::Nop             => self.set_flags(0,false), 
         }
     }
 

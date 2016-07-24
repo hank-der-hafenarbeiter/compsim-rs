@@ -32,24 +32,42 @@ pub enum Instruction {
 }
 
 pub fn op_to_instr(opcode:i64) -> Result<Instruction, ()> {
-    match get_get_opcode(opcode as u64) {
+    match get_opcode(opcode as u64) {
         0b0000_0000 => Ok(Instruction::Nop), //Nop
         0b0000_0001 => Ok(Instruction::Add(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Add
         0b0000_0010 => Ok(Instruction::Mul(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Mul
-        0b0000_0011 => Ok(Instruction::Ld(get_reg1(opcode as u64), get_addr(opcode as u64))), //Ld
+        0b0000_0011 => Ok(Instruction::Ld(get_reg1(opcode as u64), MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))), //Ld
         0b0000_0100 => Ok(Instruction::Sav(get_addr(opcode as u64),get_reg1(opcode as u64))), //Sav
         0b0000_0101 => Ok(Instruction::Push(get_reg1(opcode as u64))), //Push
         0b0000_0110 => Ok(Instruction::Pop(get_reg1(opcode as u64))), //Pop
         0b0000_0111 => { match get_nth_byte(opcode as u64 as u64, 1)  {
-                        0x0001 => Ok(Instruction::Jz(get_addr(opcode as u64))),
-                        0x0010 => Ok(Instruction::Jgz(get_addr(opcode as u64))),
-                        0x0011 => Ok(Instruction::Jlz(get_addr(opcode as u64))),
+                        0x0001 => Ok(Instruction::Jz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
+                        0x0010 => Ok(Instruction::Jgz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
+                        0x0011 => Ok(Instruction::Jlz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
                              _ => Err(()),
                     }
         }, 
              _ => Err(()),
     }
 }
+
+pub fn instruction_to_opcode(inst:Instruction) -> Result<i64, String> {
+    match inst {
+        Instruction::Nop                => Ok(0),
+        Instruction::Add(reg1, reg2)    => Ok(0x10_00_00_00_00_00_00i64 | encode_reg_n(reg1, 0) | encode_reg_n(reg2, 1)),
+        Instruction::Mul(reg1, reg2)    => Ok(0x20_00_00_00_00_00_00i64 | encode_reg_n(reg1, 0) | encode_reg_n(reg2, 1)),
+        Instruction::Ld(reg1, addr)     => Ok(0x30_00_00_00_00_00_00i64 | encode_reg_n(reg1, 0) | encode_addr(addr)),
+        Instruction::Sav(addr, reg)     => Ok(0x40_00_00_00_00_00_00i64 | encode_addr(addr) | encode_reg_n(reg, 0)),
+        Instruction::Push(reg)          => Ok(0x50_00_00_00_00_00_00i64 | encode_reg_n(reg, 0)),
+        Instruction::Pop(reg)           => Ok(0x60_00_00_00_00_00_00i64 | encode_reg_n(reg, 0)),
+        Instruction::Jz(addr)           => Ok(0x71_00_00_00_00_00_00i64 | encode_addr(addr)),
+        Instruction::Jgz(addr)          => Ok(0x72_00_00_00_00_00_00i64 | encode_addr(addr)),
+        Instruction::Jlz(addr)          => Ok(0x73_00_00_00_00_00_00i64 | encode_addr(addr)),
+    }
+}
+
+
+
 
 #[derive(Copy,Clone, PartialOrd, PartialEq, Debug)]
 pub enum MemAddr {
@@ -121,6 +139,27 @@ fn get_reg1(num:u64) -> Reg { //reg1 is always coded into bits [4..7]
     }
 }
 
+fn encode_reg_n(_reg:Reg, n:usize) -> i64 {
+    match _reg {
+        Reg::EAX => 0x01_00_00_00_00_00_00i64 >> 4*n, 
+        Reg::EBX => 0x02_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ECX => 0x03_00_00_00_00_00_00i64 >> 4*n,
+        Reg::EDX => 0x04_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ESP => 0x05_00_00_00_00_00_00i64 >> 4*n,
+        Reg::EBP => 0x06_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ISP => 0x07_00_00_00_00_00_00i64 >> 4*n,
+    }
+}
+
+fn encode_addr(_addr:MemAddr) -> i64 {
+    if let MemAddr::Addr(addr_as_i64) = _addr {
+        addr_as_i64 >> 12  //only lower 52 bit of opcodes can be used for addressing
+    } else {
+        0 //MemAddr::Nullptr
+    }
+}
+
+
 fn get_reg2(num:u64) -> Reg { //reg2 is always coded into bits [8..11]
     match get_nth_byte(num, 2) & 0x0f {
         0x01 => Reg::EAX,
@@ -139,7 +178,7 @@ fn get_addr(num:u64) -> MemAddr {
 }
 
 
-fn get_get_opcode(num:u64)->u8 { //return 0000_xxxx opcode
+fn get_opcode(num:u64)->u8 { //return 0000_xxxx opcode
     (num >> 56) as u8
 }
 
