@@ -26,19 +26,19 @@ impl Parser {
             if let Some(op1) = iter.next() {
                 if let Some(op2) = iter.next() {
                     program.push(match mnemonic.as_ref() {
-                        "ADD"   => Instruction::Add(string_to_reg(&op1.to_string()), string_to_reg(&op2.to_string())),
-                        "MUL"   => Instruction::Mul(string_to_reg(&op1.to_string()), string_to_reg(&op2.to_string())),
-                        "LDD"   => Instruction::Ld(string_to_reg(&op1.to_string()), string_to_address(&op2.to_string())),
-                        "SAV"   => Instruction::Sav(string_to_address(&op1.to_string()), string_to_reg(&op2.to_string())),
+                        "ADD"   => Instruction::Add(string_to_reg(op1), string_to_reg(op2)),
+                        "MUL"   => Instruction::Mul(string_to_reg(op1), string_to_reg(op2)),
+                        "LDD"   => Instruction::Ld(string_to_reg(op1), string_to_address(op2)),
+                        "SAV"   => Instruction::Sav(string_to_address(op1), string_to_reg(op2)),
                         &_      => panic!("Unkown two operant instruction"),
                     })
                 } else {
                     program.push(match mnemonic.as_ref() {
-                        "PUSH"  => Instruction::Push(string_to_reg(&op1.to_string())),
-                        "POP"   => Instruction::Pop(string_to_reg(&op1.to_string())),
-                        "JZ"    => Instruction::Jz(string_to_address(&op1.to_string())),
-                        "JGZ"   => Instruction::Jgz(string_to_address(&op1.to_string())),
-                        "JLZ"   => Instruction::Jlz(string_to_address(&op1.to_string())),
+                        "PUSH"  => Instruction::Push(string_to_reg(op1)),
+                        "POP"   => Instruction::Pop(string_to_reg(op1)),
+                        "JZ"    => Instruction::Jz(string_to_address(op1)),
+                        "JGZ"   => Instruction::Jgz(string_to_address(op1)),
+                        "JLZ"   => Instruction::Jlz(string_to_address(op1)),
                         &_      => panic!("Unkown one operant instruction"),
                     })
                 }
@@ -59,27 +59,26 @@ enum ParseError {
     UnkownInstruction,
 }
 
-fn string_to_instruction(_s:&String) -> Result<Instruction, ParseError> {
+fn string_to_instruction(_s:&str) -> Result<Instruction, ParseError> {
     let mut iter = _s.split_whitespace();
 
         let mnemonic:String = iter.next().expect("Read empty Instruction").to_string();
         if let Some(op1) = iter.next() {
             if let Some(op2) = iter.next() {
-                println!("string to instruction: {:?}", op2);
                 match mnemonic.as_ref() {
-                    "ADD"   => Ok(Instruction::Add(string_to_reg(&op1.to_string()), string_to_reg(&op2.to_string()))),
-                    "MUL"   => Ok(Instruction::Mul(string_to_reg(&op1.to_string()), string_to_reg(&op2.to_string()))),
-                    "LDD"   => Ok(Instruction::Ld(string_to_reg(&op1.to_string()), string_to_address(&op2.to_string()))),
-                    "SAV"   => Ok(Instruction::Sav(string_to_address(&op1.to_string()), string_to_reg(&op2.to_string()))),
+                    "ADD"   => Ok(Instruction::Add(string_to_reg(op1), string_to_reg(op2))),
+                    "MUL"   => Ok(Instruction::Mul(string_to_reg(op1), string_to_reg(op2))),
+                    "LDD"   => Ok(Instruction::Ld(string_to_reg(op1), string_to_address(op2))),
+                    "SAV"   => Ok(Instruction::Sav(string_to_address(op1), string_to_reg(op2))),
                     &_      => Err(ParseError::UnkownInstruction),
                 }
             } else {
                 match mnemonic.as_ref() {
-                    "PUSH"  => Ok(Instruction::Push(string_to_reg(&op1.to_string()))),
-                    "POP"   => Ok(Instruction::Pop(string_to_reg(&op1.to_string()))),
-                    "JZ"    => Ok(Instruction::Jz(string_to_address(&op1.to_string()))),
-                    "JGZ"   => Ok(Instruction::Jgz(string_to_address(&op1.to_string()))),
-                    "JLZ"   => Ok(Instruction::Jlz(string_to_address(&op1.to_string()))),
+                    "PUSH"  => Ok(Instruction::Push(string_to_reg(op1))),
+                    "POP"   => Ok(Instruction::Pop(string_to_reg(op1))),
+                    "JZ"    => Ok(Instruction::Jz(string_to_address(op1))),
+                    "JGZ"   => Ok(Instruction::Jgz(string_to_address(op1))),
+                    "JLZ"   => Ok(Instruction::Jlz(string_to_address(op1))),
                     &_      => Err(ParseError::UnkownInstruction),
                 }
             }
@@ -93,11 +92,11 @@ fn string_to_instruction(_s:&String) -> Result<Instruction, ParseError> {
 }
 
 
-fn string_to_address(_s:&String) -> MemAddr {
+fn string_to_address(_s:&str) -> MemAddr {
     MemAddr::Addr(i64::from_str_radix(&_s, 16).expect("Invalid Memory Address:"))
 }
 
-fn string_to_reg(_s:&String) -> Reg {
+fn string_to_reg(_s:&str) -> Reg {
     let inst = match _s.as_ref() {
         "EAX" => Reg::EAX,
         "EBX" => Reg::EBX,
@@ -112,6 +111,14 @@ fn string_to_reg(_s:&String) -> Reg {
     inst
 }
 
+#[test]
+fn converting_strings_to_regs() {
+    use utils::*;
+    use parser::*;
+
+    let s = "EBX";
+    assert!(Reg::EBX == string_to_reg(s));
+}
 
 
 #[test]
@@ -122,6 +129,6 @@ fn converting_strings_to_instructions() {
     let s = "ADD EBX EBX".to_string();
     let inst = string_to_instruction(&s);
     println!("{:?}", inst);
-    assert!(Ok(Instruction::Add(Reg::EAX, Reg::EBX)) == string_to_instruction(&s));
+    assert!(Ok(Instruction::Add(Reg::EBX, Reg::EBX)) == string_to_instruction(&s));
 }
 
