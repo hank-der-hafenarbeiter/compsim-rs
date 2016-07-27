@@ -1,3 +1,4 @@
+#![feature(step_by)]
 extern crate snowflake;
 
 mod cpu;
@@ -46,5 +47,6 @@ impl Motherboard {
 }
 
 fn main() {
+
 
 }
