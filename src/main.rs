@@ -4,6 +4,7 @@ extern crate snowflake;
 mod cpu;
 mod utils;
 mod parser;
+mod test;
 
 use std::sync::mpsc::{Sender,Receiver, channel};
 use utils::MemBusOp;
