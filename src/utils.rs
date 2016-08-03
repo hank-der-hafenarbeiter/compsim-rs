@@ -5,49 +5,48 @@ use snowflake::ProcessUniqueId;
 pub enum Instruction {
     //ARITHMETICAL OPERATION
                                 
-    Add(Reg, Reg),          //Operation     Reg1 Reg2
-                            //0001          xxxx xxxx 000...
-    Mul(Reg, Reg),          //Operation     Reg1
-                            //0010          xxxx xxxx 000...
+    Add(Reg, Reg),          //Operation     
+                            //1R_R0_00_00_00_00_00_00
+    Mul(Reg, Reg),          //Operation
+                            //2R_R0_00_00_00_00_00_00
     //LOADING AND SAVING
-    Ld(Reg, MemAddr), //Operation     Reg       Addr
-                            //0011          xxxx 0000 xxx...(52bit)
-    Sav(MemAddr, Reg),//Operation     Reg       Addr
-                            //0100          xxxx 0000 xxx...(52bit) 
+    Ld(Reg, MemAddr),       //Operation
+                            //3R_0A_AA_AA_AA_AA_AA_AA
+    Sav(MemAddr, Reg),      //Operation 
+                            //4R_0A_AA_AA_AA_AA_AA_AA
     //STACK
-    Push(Reg),              //Operation     Reg
-                            //0101          xxxx 000...
-    Pop(Reg),               //Operation     Reg
-                            //0110          xxxx 000...
+    Push(Reg),              //Operation
+                            //5R_00_00_00_00_00_00_00
+    Pop(Reg),               //Operation
+                            //6R_00_00_00_00_00_00_00
     //JUMPS
-    Jz(MemAddr),      //Operation               Addr
-                            //0111 0001     0000 0000 xxx...(52bit)           
-    Jgz(MemAddr),     //Operation               Addr
-                            //0111 0010     0000 0000 xxx...(52bit) 
-    Jlz(MemAddr),     //Operation               Addr
-                            //0111 0011     0000 0000 xxx...(52bit) 
+    Jz(MemAddr),            //Operation
+                            //71_0A_AA_AA_AA_AA_AA_AA
+    Jgz(MemAddr),           //Operation
+                            //72_0A_AA_AA_AA_AA_AA_AA
+    Jlz(MemAddr),           //Operation
+                            //73_0A_AA_AA_AA_AA_AA_AA
 
     Nop,                    //Operation
-                            //000...(64bit)
+                            //00_00_00_00_00_00_00_00
 }
 
-pub fn op_to_instr(opcode:i64) -> Result<Instruction, ()> {
-    match get_opcode(opcode as u64) {
-        0b0000_0000 => Ok(Instruction::Nop), //Nop
-        0b0000_0001 => Ok(Instruction::Add(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Add
-        0b0000_0010 => Ok(Instruction::Mul(get_reg1(opcode as u64),get_reg2(opcode as u64))), //Mul
-        0b0000_0011 => Ok(Instruction::Ld(get_reg1(opcode as u64), MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))), //Ld
-        0b0000_0100 => Ok(Instruction::Sav(get_addr(opcode as u64),get_reg1(opcode as u64))), //Sav
-        0b0000_0101 => Ok(Instruction::Push(get_reg1(opcode as u64))), //Push
-        0b0000_0110 => Ok(Instruction::Pop(get_reg1(opcode as u64))), //Pop
-        0b0000_0111 => { match get_nth_byte(opcode as u64 as u64, 1)  {
-                        0x0001 => Ok(Instruction::Jz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
-                        0x0010 => Ok(Instruction::Jgz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
-                        0x0011 => Ok(Instruction::Jlz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
-                             _ => Err(()),
-                    }
+pub fn op_to_instr(opcode:i64) -> Result<Instruction, String> {
+    match get_opcode(opcode) {
+        0x00 => Ok(Instruction::Nop), //Nop
+        0x01 => Ok(Instruction::Add(get_reg1(opcode),get_reg2(opcode))), //Add
+        0x02 => Ok(Instruction::Mul(get_reg1(opcode ),get_reg2(opcode ))), //Mul
+        0x03 => Ok(Instruction::Ld(get_reg1(opcode ), MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))), //Ld
+        0x04 => Ok(Instruction::Sav(get_addr(opcode ),get_reg1(opcode ))), //Sav
+        0x05 => Ok(Instruction::Push(get_reg1(opcode ))), //Push
+        0x06 => Ok(Instruction::Pop(get_reg1(opcode ))), //Pop
+        0x07 => match (opcode & 0xff_00_00_00_00_00_00_00i64) >> 56 {
+            0x71 => Ok(Instruction::Jz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
+            0x72 => Ok(Instruction::Jgz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
+            0x73 => Ok(Instruction::Jlz(MemAddr::Addr(opcode & 0x00_0f_ff_ff_ff_ff_ff_ff))),
+            op => Err("Unkown Jump!!: ".to_string() + &(opcode & 0xff_00_00_00_00_00_00_00i64).to_string()),
         }, 
-             _ => Err(()),
+        op => Err("Unkown Instruction: ".to_string() + &op.to_string()),
     }
 }
 
@@ -94,13 +93,13 @@ impl Sub for MemAddr {
 
 #[derive(Copy, Clone,PartialEq, Debug)]
 pub enum Reg {
-    EAX,    //0x0001
-    EBX,    //0x0010
-    ECX,    //0x0011
-    EDX,    //0x0100
-    ESP,    //0x0101
-    EBP,    //0x0110
-    ISP,    //0x0111
+    EAX,    //0x01
+    EBX,    //0x02
+    ECX,    //0x03
+    EDX,    //0x04
+    ESP,    //0x05
+    EBP,    //0x06
+    ISP,    //0x07
 }
 
 #[derive(Debug)]
@@ -120,14 +119,29 @@ pub enum MemBusOp {
     Error(String)
 }
 
-fn get_nth_byte(num:u64, nth:usize) -> u8 {
-    let mask =  0x00_00_00_00_00_00_00_ffu64;
-    num >> (7-num)*8;
-    (mask & num) as u8
+pub fn get_nth_byte(num:i64, nth:usize) -> i8 {
+    let mask =  0x00_00_00_00_00_00_00_ffi64;
+    let shifted = num >> (7-nth)*8;
+    (mask & shifted) as i8
 }
 
-fn get_reg1(num:u64) -> Reg { //reg1 is always coded into bits [4..7]
-    match get_nth_byte(num, 2) & 0xf0 { //reg in 4 most significant bits
+fn get_reg1(num:i64) -> Reg { //reg1 is always coded into bits [4..7]
+    match get_nth_byte(num, 0) & 0x0f { //reg in 4 most significant bits
+        0x01 => Reg::EAX,
+        0x02 => Reg::EBX,
+        0x03 => Reg::ECX,
+        0x04 => Reg::EDX,
+        0x05 => Reg::ESP,
+        0x06 => Reg::EBP,
+        0x07 => Reg::ISP,
+        c    => panic!("Unknown register code2: {}", c),
+    }
+}
+
+fn get_reg2(num:i64) -> Reg { //reg2 is always coded into bits [8..11]
+    println!("get_reg1({:#x})", num);
+    println!("get_nth_byte(num, 1) & 0xf0 = {:#x}",get_nth_byte(num, 1) & 0xf0 );
+    match get_nth_byte(num, 1) & 0xf0 {
         0x10 => Reg::EAX,
         0x20 => Reg::EBX,
         0x30 => Reg::ECX,
@@ -135,19 +149,19 @@ fn get_reg1(num:u64) -> Reg { //reg1 is always coded into bits [4..7]
         0x50 => Reg::ESP,
         0x60 => Reg::EBP,
         0x70 => Reg::ISP,
-             _ => panic!("Unknown register code: {}", num),
+        c    => panic!("Unknown register code2: {}", c),
     }
 }
 
 fn encode_reg_n(_reg:Reg, n:usize) -> i64 {
     match _reg {
-        Reg::EAX => 0x01_00_00_00_00_00_00i64 >> 4*n, 
-        Reg::EBX => 0x02_00_00_00_00_00_00i64 >> 4*n,
-        Reg::ECX => 0x03_00_00_00_00_00_00i64 >> 4*n,
-        Reg::EDX => 0x04_00_00_00_00_00_00i64 >> 4*n,
-        Reg::ESP => 0x05_00_00_00_00_00_00i64 >> 4*n,
-        Reg::EBP => 0x06_00_00_00_00_00_00i64 >> 4*n,
-        Reg::ISP => 0x07_00_00_00_00_00_00i64 >> 4*n,
+        Reg::EAX => 0x01_00_00_00_00_00_00_00i64 >> 4*n, 
+        Reg::EBX => 0x02_00_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ECX => 0x03_00_00_00_00_00_00_00i64 >> 4*n,
+        Reg::EDX => 0x04_00_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ESP => 0x05_00_00_00_00_00_00_00i64 >> 4*n,
+        Reg::EBP => 0x06_00_00_00_00_00_00_00i64 >> 4*n,
+        Reg::ISP => 0x07_00_00_00_00_00_00_00i64 >> 4*n,
     }
 }
 
@@ -160,25 +174,14 @@ fn encode_addr(_addr:MemAddr) -> i64 {
 }
 
 
-fn get_reg2(num:u64) -> Reg { //reg2 is always coded into bits [8..11]
-    match get_nth_byte(num, 2) & 0x0f {
-        0x01 => Reg::EAX,
-        0x02 => Reg::EBX,
-        0x03 => Reg::ECX,
-        0x04 => Reg::EDX,
-        0x05 => Reg::ESP,
-        0x06 => Reg::EBP,
-        0x07 => Reg::ISP,
-             _ => panic!("Unknown register code: {}", num),
-    }
-}
 
-fn get_addr(num:u64) -> MemAddr {
-    MemAddr::Addr((num & 0x00_0f_ff_ff_ff_ff_ff_ffu64) as i64)
+
+fn get_addr(num:i64) -> MemAddr {
+    MemAddr::Addr((num & 0x00_0f_ff_ff_ff_ff_ff_ffi64) )
 }
 
 
-fn get_opcode(num:u64)->u8 { //return 0000_xxxx opcode
-    (num >> 56) as u8
+fn get_opcode(num:i64)-> i8 { //return 0000_xxxx opcode
+    (num >> 60) as i8
 }
 

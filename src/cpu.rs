@@ -6,30 +6,29 @@ use utils::*;
 const CORE_NUM:usize = 1;  //number of cores per cpu
 const PIPE_SIZE:usize = 8; //size of instruction pipeline
 
-
-struct Core {
-    ID:ProcessUniqueId,
+#[derive(Debug)]
+pub struct Core { //TODO: rewrite tests so that members don't need to be public
+    pub ID:ProcessUniqueId,
     //OPERATION PIPELINE
-    pipe:[(MemAddr, i64); PIPE_SIZE], 
+    pub pipe:[(MemAddr, i64); PIPE_SIZE], 
 
     //REGISTERS
-    EAX:i64,
-    EBX:i64,
-    ECX:i64,
-    EDX:i64,
-    ESP:i64,
-    EBP:i64,
-    ISP:i64,
-    
+    pub EAX:i64,
+    pub EBX:i64,
+    pub ECX:i64,
+    pub EDX:i64,
+    pub ESP:i64,
+    pub EBP:i64,
+    pub ISP:i64,
     //FLAGS
-    OVERFLOW:bool,
-    ZERO:bool,
-    SIGN:bool,
-    CARRY:bool,
+    pub OVERFLOW:bool,
+    pub ZERO:bool,
+    pub SIGN:bool,
+    pub CARRY:bool,
 
     //CPU BUS
-    tx:Sender<CPUBusOp>,
-    rx:Receiver<CPUBusOp>,
+    pub tx:Sender<CPUBusOp>,
+    pub rx:Receiver<CPUBusOp>,
 }
 
 impl Core {
@@ -64,6 +63,7 @@ impl Core {
     }
 
     fn write_reg(&mut self, reg:Reg, value:i64) {
+        println!("write_reg({:?},{:?}", reg, value); //DEBUG
         match reg {
             Reg::EAX => self.EAX = value,
             Reg::EBX => self.EBX = value,
@@ -118,6 +118,9 @@ impl Core {
 
         let cur_addr = self.ISP;
         let cur_instr = self.read_instr_at(MemAddr::Addr(cur_addr)); 
+
+        println!("exec_instr: (cur_addr, cur_instr) = ({:?},{:?})", cur_addr, cur_instr);   //DEBUG
+
         match cur_instr {
             Instruction::Add(reg1, reg2) => {
                 let (mut n,of) = self.read_reg(reg1).overflowing_add(self.read_reg(reg2));
@@ -193,6 +196,7 @@ impl Core {
 
     fn read_instr_at(&mut self, addr:MemAddr) -> Instruction {
         if let Ok(opcode) = self.read_from_pipe(addr) {
+            println!("read_instr_at: opcode = {:?}", opcode);   //DEBUG
             op_to_instr(opcode).expect("Unrecogniced Instruction!")
         }
         else {
