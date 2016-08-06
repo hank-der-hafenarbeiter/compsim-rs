@@ -7,13 +7,13 @@ fn converting_strings_to_regs() {
 
     let vec = vec!["EAX", "EBX", "ECX", "EDX", "ESP", "EBP", "ISP"];
     let mut iter = vec.iter();
-    assert!(Ok(Reg::EAX) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::EBX) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::ECX) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::EDX) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::ESP) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::EBP) == string_to_reg(iter.next().unwrap()));
-    assert!(Ok(Reg::ISP) == string_to_reg(iter.next().unwrap()));
+    assert!(Ok(Reg::EAX) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::EBX) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::ECX) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::EDX) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::ESP) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::EBP) == iter.next().unwrap().parse());
+    assert!(Ok(Reg::ISP) == iter.next().unwrap().parse());
 }
 
 
@@ -24,37 +24,7 @@ fn converting_strings_to_instructions() {
     
     let v_regs = vec!["EAX", "EBX", "ECX", "EDX", "ESP", "EBP", "ISP"];
     let s = "ADD EBX EBX".to_string();
-    let inst = string_to_instruction(&s);
-    assert!(Ok(Instruction::Add(Reg::EBX, Reg::EBX)) == string_to_instruction(&s));
-}
-
-#[test]
-fn converting_strings_to_addresses() {
-    use utils::*;
-    use parser::*;
-
-    for num in 0..0x00_00_00_00_00_00_ff_ffi64 {
-        if let Err(mem) = string_to_address(&num.to_string()) {
-            println!("{:x} => {:?}", num, string_to_address(&num.to_string()));
-            panic!("valid address not accepted");
-        }
-    }
-
-    if let Err(mem) = string_to_address(&0x00_00_00_00_0f_ff_ff_ff.to_string()) {
-        panic!("Heighest addres not accepted!");
-    }
-    
-    for num in -10..-1 as i64 {
-        if let Ok(mem) = string_to_address(&num.to_string()) {
-            panic!("too low address accepted");
-        }
-    }
-      
-    for num in (0x00_00_00_00_f0_00_00_00i64..0x00_00_00_00_1f_ff_ff_ffi64).step_by(100000) {
-        if let Ok(mem) = string_to_address(&num.to_string()) {
-            panic!("too high address accepted");
-        }
-    }
+    assert!(Ok(InstructionBuilder::new().set_opcode(Opcode::Add).set_reg1(Reg::EBX).set_reg2(Reg::EBX).finalize()) == s.parse());
 }
 
 #[test]
@@ -62,6 +32,7 @@ fn converting_file_to_programm() {
     use std::io::Read;
     use std::io::Write;
     use std::fs::File;
+    use std::fs::remove_file;
     use parser::Parser;
     use utils::*;
     use self::rand::Rng;
@@ -72,7 +43,8 @@ fn converting_file_to_programm() {
     let mut f_handle = File::create("test.asm").unwrap();
 
     for _ in 0..100 {
-        let (s,i,_) = rand_instr();
+        let (s,i) = rand_instr();
+        println!("{}\n{:#X}\n{:#X}\n", s, s.parse::<Instruction>().unwrap().0, i.0);
         inst_string = inst_string + &s;
         inst_string.push('\n');
 
@@ -92,4 +64,5 @@ fn converting_file_to_programm() {
         println!("{:?} | {:?}",i1, i2);
         assert_eq!(i1,i2);
     }
+    remove_file("test.asm");
 }

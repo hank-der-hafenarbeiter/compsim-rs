@@ -10,16 +10,16 @@ const PIPE_SIZE:usize = 8; //size of instruction pipeline
 pub struct Core { //TODO: rewrite tests so that members don't need to be public
     pub ID:ProcessUniqueId,
     //OPERATION PIPELINE
-    pub pipe:[(MemAddr, i64); PIPE_SIZE], 
+    pub pipe:[(u64, u64); PIPE_SIZE], 
 
     //REGISTERS
-    pub EAX:i64,
-    pub EBX:i64,
-    pub ECX:i64,
-    pub EDX:i64,
-    pub ESP:i64,
-    pub EBP:i64,
-    pub ISP:i64,
+    pub EAX:u64,
+    pub EBX:u64,
+    pub ECX:u64,
+    pub EDX:u64,
+    pub ESP:u64,
+    pub EBP:u64,
+    pub ISP:u64,
     //FLAGS
     pub OVERFLOW:bool,
     pub ZERO:bool,
@@ -34,7 +34,7 @@ pub struct Core { //TODO: rewrite tests so that members don't need to be public
 impl Core {
     pub fn new(_tx:Sender<CPUBusOp>, _rx:Receiver<CPUBusOp>) -> Core {
         Core{   ID:ProcessUniqueId::new(), 
-                pipe:[(MemAddr::Nullptr, 0); PIPE_SIZE],
+                pipe:[(0, 0); PIPE_SIZE],
                 EAX:0,
                 EBX:0,
                 ECX:0,
@@ -50,7 +50,7 @@ impl Core {
                 rx:_rx,
         }
     }
-    fn read_reg(&self, reg:Reg) -> i64 { 
+    fn read_reg(&self, reg:Reg) -> u64 { 
         match reg {
             Reg::EAX => self.EAX,
             Reg::EBX => self.EBX,
@@ -62,8 +62,7 @@ impl Core {
         }
     }
 
-    fn write_reg(&mut self, reg:Reg, value:i64) {
-        println!("write_reg({:?},{:?}", reg, value); //DEBUG
+    fn write_reg(&mut self, reg:Reg, value:u64) {
         match reg {
             Reg::EAX => self.EAX = value,
             Reg::EBX => self.EBX = value,
@@ -75,20 +74,18 @@ impl Core {
         };
     }
 
-    fn read_from_pipe(&self, addr:MemAddr) -> Result<i64, ()> {
-        if let MemAddr::Addr(_) = addr {
-            if let MemAddr::Addr(offset) = self.pipe[PIPE_SIZE-1].0 - addr {
-                if 0 <= offset && offset < PIPE_SIZE as i64 {
-                    return Ok(self.pipe[offset as usize].1)
-                } else {
-                    return Err(())
-                }
-            }
+    fn read_from_pipe(&self, addr:u64) -> Result<u64, ()> {
+        let pipe_start = self.pipe[0].0;
+        let pipe_end = pipe_start + PIPE_SIZE as u64;
+        if pipe_start <= addr && addr <= pipe_end {
+            let offset = addr - pipe_start;
+            Ok(self.pipe[offset as usize].1)
+        } else {
+            Err(())
         }
-        Err(())
     }
 
-    fn set_flags(&mut self, res:i64, _of:bool) {
+    fn set_flags(&mut self, res:u64, _of:bool) {
 
         if _of {
             self.OVERFLOW = true;
@@ -117,87 +114,75 @@ impl Core {
     pub fn exec_instr(&mut self) {
 
         let cur_addr = self.ISP;
-        let cur_instr = self.read_instr_at(MemAddr::Addr(cur_addr)); 
+        let cur_instr = self.read_instr_at(cur_addr); 
+        self.ISP += 1;
 
-        println!("exec_instr: (cur_addr, cur_instr) = ({:?},{:?})", cur_addr, cur_instr);   //DEBUG
+        println!("exec_instr: (cur_addr, cur_instr) = ({},{})", cur_addr, cur_instr);   //DEBUG
 
-        match cur_instr {
-            Instruction::Add(reg1, reg2) => {
-                let (mut n,of) = self.read_reg(reg1).overflowing_add(self.read_reg(reg2));
+        match cur_instr.opcode() {
+            Opcode::Add => {
+                let (mut n,of) = self.read_reg(cur_instr.reg1()).overflowing_add(self.read_reg(cur_instr.reg2()));
                 if of {
-                    n = n.wrapping_add(self.read_reg(reg1));
+                    n = n.wrapping_add(self.read_reg(cur_instr.reg1()));
                 }
-                self.write_reg(reg1, n);
+                self.write_reg(cur_instr.reg1(), n);
                 self.set_flags(n,of);
             }, 
 
-            Instruction::Mul(reg1, reg2) => {
-                let (mut n,of) = self.read_reg(reg1).overflowing_mul(self.read_reg(reg2));
+            Opcode::Mul => {
+                let (mut n,of) = self.read_reg(cur_instr.reg1()).overflowing_mul(self.read_reg(cur_instr.reg2()));
                 if of {
-                    n = n.wrapping_mul(self.read_reg(reg1));
+                    n = n.wrapping_mul(self.read_reg(cur_instr.reg1()));
                 }
-                self.write_reg(reg1, n);
+                self.write_reg(cur_instr.reg1(), n);
                 self.set_flags(n,of);
             }, 
 
-            Instruction::Ld(reg1, addr)  => {
-                let n = self.read_from_memory(addr, 1).pop().expect("Received empty block from read_from_memory()").1;
-                self.write_reg(reg1, n);
+            Opcode::Ld  => {
+                let n = self.read_from_memory(cur_instr.addr(), 1).pop().expect("Received empty block from read_from_memory()").1;
+                self.write_reg(cur_instr.reg1(), n);
                 self.set_flags(n,false);
             }, 
 
-            Instruction::Sav(addr, reg)  => {
-                let n = self.read_reg(reg);
-                self.write_to_memory(vec![(addr, n)]);
+            Opcode::Sav  => {
+                let n = self.read_reg(cur_instr.reg1());
+                self.write_to_memory(vec![(cur_instr.addr(), n)]);
                 self.set_flags(n,false);
             },
 
-            Instruction::Push(reg)       => {
+            Opcode::Push => {
                 self.ESP -= 1; 
-                let n = self.read_reg(reg);
-                self.write_to_memory(vec![(MemAddr::Addr(self.ESP), n)]);
+                let n = self.read_reg(cur_instr.reg1());
+                self.write_to_memory(vec![(self.ESP, n)]);
                 self.set_flags(n,false);
             },
 
-            Instruction::Pop(reg)        => {
+            Opcode::Pop => {
                 self.ESP += 1;
                 assert!(self.ESP >= 0);
-                let n = self.read_from_memory(MemAddr::Addr(self.ESP), 1).pop().expect("Received empty block from read_from_memory()").1;
-                self.write_reg(reg, n);
+                let n = self.read_from_memory(self.ESP, 1).pop().expect("Received empty block from read_from_memory()").1;
+                self.write_reg(cur_instr.reg1(), n);
                 self.set_flags(n,false);
             },
-            Instruction::Jz(addr)        => if self.ZERO {
-                if let MemAddr::Addr(addr_as_i64) = addr {
-                    self.ISP = addr_as_i64;
-                } else {
-                    panic!("Jump (Jz) to invalid address");
-                }
+            Opcode::Jz => if self.ZERO {
+                self.ISP = cur_instr.addr();
                 self.set_flags(0,false);
             },
-            Instruction::Jgz(addr)       => if !self.SIGN {
-                if let MemAddr::Addr(addr_as_i64) = addr {
-                    self.ISP = addr_as_i64;
-                } else {
-                    panic!("Jump (Jz) to invalid address");
-                }
+            Opcode::Jgz => if !self.SIGN {
+                self.ISP = cur_instr.addr();
                 self.set_flags(0,false);
             },
-            Instruction::Jlz(addr)       => if self.SIGN {
-                if let MemAddr::Addr(addr_as_i64) = addr {
-                    self.ISP = addr_as_i64;
-                } else {
-                    panic!("Jump (Jz) to invalid address");
-                }
+            Opcode::Jlz => if self.SIGN {
+                self.ISP = cur_instr.addr();
                 self.set_flags(0,false);
             }, 
-            Instruction::Nop             => self.set_flags(0,false), 
+            Opcode::Nop => self.set_flags(0,false), 
         }
     }
 
-    fn read_instr_at(&mut self, addr:MemAddr) -> Instruction {
+    fn read_instr_at(&mut self, addr:u64) -> Instruction {
         if let Ok(opcode) = self.read_from_pipe(addr) {
-            println!("read_instr_at: opcode = {:?}", opcode);   //DEBUG
-            op_to_instr(opcode).expect("Unrecogniced Instruction!")
+            Instruction(opcode)
         }
         else {
             let mut mem_block = self.read_from_memory(addr, PIPE_SIZE);
@@ -206,11 +191,11 @@ impl Core {
                 self.pipe[i] = item;
                 i -= 1;
             }
-            op_to_instr(self.pipe[0].1).expect("Unrecogniced instruction")
+            Instruction(self.pipe[0].1)
         }
     }
 
-    fn read_from_memory(&self, start_addr:MemAddr, num:usize) -> Vec<(MemAddr, i64)> {
+    fn read_from_memory(&self, start_addr:u64, num:usize) -> Vec<(u64, u64)> {
         self.tx. send(CPUBusOp::RequestBlock(start_addr,num));
         match self.rx.recv().expect("CPUBus has disconnected unexpectedly") {
             CPUBusOp::GiveBlock(res_vec) => res_vec,
@@ -220,13 +205,13 @@ impl Core {
         }
     }
 
-    fn write_to_memory(&self, values:Vec<(MemAddr, i64)>) {
+    fn write_to_memory(&self, values:Vec<(u64, u64)>) {
         self.tx.send(CPUBusOp::GiveBlock(values));
     }
 }
 
 pub struct CPU {
-    //cache:[i64, CACHE_SIZE],
+    //cache:[u64, CACHE_SIZE],
     cores:Vec<(Core, Sender<CPUBusOp>, Receiver<CPUBusOp>)>,
     //BUS
     tx:Sender<MemBusOp>,

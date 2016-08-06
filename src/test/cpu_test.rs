@@ -1,6 +1,5 @@
 
 #[test]
-#[ignore]
 fn basic_reg_instr() {
     use cpu::*;
     use utils::*;
@@ -11,14 +10,14 @@ fn basic_reg_instr() {
     let mut c = Core{   
         ID:snowflake::ProcessUniqueId::new(), 
         pipe:[
-            (MemAddr::Addr(0), instruction_to_opcode(Instruction::Add(Reg::EAX,Reg::EAX)).unwrap()),
-            (MemAddr::Addr(1), instruction_to_opcode(Instruction::Nop).unwrap()),
-            (MemAddr::Addr(2), instruction_to_opcode(Instruction::Nop).unwrap()),
-            (MemAddr::Addr(3), instruction_to_opcode(Instruction::Nop).unwrap()),
-            (MemAddr::Addr(4), instruction_to_opcode(Instruction::Nop).unwrap()),
-            (MemAddr::Addr(5), instruction_to_opcode(Instruction::Nop).unwrap()),
-            (MemAddr::Addr(6), instruction_to_opcode(Instruction::Mul(Reg::EAX, Reg::EBP)).unwrap()),
-            (MemAddr::Addr(7), instruction_to_opcode(Instruction::Jz(MemAddr::Addr(0))).unwrap()),
+            (0, InstructionBuilder::new().set_opcode(Opcode::Add).set_reg1(Reg::EAX).set_reg2(Reg::ECX).finalize().0),
+            (1, InstructionBuilder::new().finalize().0),
+            (2, InstructionBuilder::new().set_opcode(Opcode::Jz).set_addr(0).finalize().0),
+            (3, InstructionBuilder::new().finalize().0),
+            (4, InstructionBuilder::new().finalize().0),
+            (5, InstructionBuilder::new().finalize().0),
+            (6, InstructionBuilder::new().finalize().0),
+            (7, InstructionBuilder::new().finalize().0),
         ],
         EAX:1,
         EBX:0,
@@ -34,7 +33,8 @@ fn basic_reg_instr() {
         tx:fake_tx,
         rx:fake_rx,
     };
-
-    c.exec_instr();
+    for _ in 0..5 {
+        c.exec_instr();
+    }
     panic!();
 }

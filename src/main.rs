@@ -1,5 +1,7 @@
 #![feature(step_by)]
 extern crate snowflake;
+#[macro_use]extern crate enum_primitive;
+extern crate num;
 
 mod cpu;
 mod utils;
