@@ -176,7 +176,12 @@ impl Core {
                 self.ISP = cur_instr.addr();
                 self.set_flags(0,false);
             }, 
-            Opcode::Nop => self.set_flags(0,false), 
+            Opcode::Nop => {
+                self.OVERFLOW = false;
+                self.ZERO = false;
+                self.SIGN = false;
+                self.CARRY = false;
+            },
         }
     }
 
