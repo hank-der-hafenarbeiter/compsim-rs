@@ -7,7 +7,10 @@ use std::vec::IntoIter;
 use std::i64;
 use std::error::*;
 use std::num::*;
+use std::fmt;
 use utils::{Instruction, Reg};
+
+
 
 #[derive(Debug, Clone)]
 pub struct Parser {
@@ -53,9 +56,36 @@ impl Parser {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum ParseError {
-    EOF,
     UnkownInstruction(String),
-    UnkownReg(String),
-    InvalidMemAddress(String),
+    UnkownReg(ParseIntError),
+    InvalidMemAddress(ParseIntError),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ParseError::UnkownInstruction(s)  => write!(f, "UnkownInstruction: {}", s),
+            ParseError::UnkownReg(ref err)          => write!(f, "UnkownReg: {}", err),
+            ParseError::InvalidMemAddress(ref err)  => write!(f, "InvalidMemAddress: {}", err),
+        }
+    }
+}
+
+impl Error for ParseError {
+    fn description(&self) -> &str {
+        match *self {
+            ParseError::UnkownInstruction(ref err)  => err.description(),
+            ParseError::UnkownReg(ref err)          => err.description(),
+            ParseError::InvalidMemAddress(ref err)  => err.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            ParseError::UnkownInstruction(ref err)  => Some(err),
+            ParseError::UnkownReg(ref err)          => Some(err),
+            ParseError::InvalidMemAddress(ref err)  => Some(err),
+        }
+    }
 }
 
